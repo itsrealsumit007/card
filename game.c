@@ -3,13 +3,19 @@
 #include <time.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <string.h>
 
 #define ROWS 4
 #define COLS 4
 #define TOTAL_CARDS (ROWS * COLS / 2)
+#define NAME_LENGTH 50
+#define LEADERBOARD_SIZE 3
 
 char cards[ROWS][COLS];
 bool revealed[ROWS][COLS];
+char playerName[NAME_LENGTH];
+int bestScores[LEADERBOARD_SIZE];
+char bestPlayers[LEADERBOARD_SIZE][NAME_LENGTH];
 
 void initializeBoard() {
     char symbols[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'};
@@ -73,13 +79,29 @@ void clearScreen() {
     #endif
 }
 
-void playGame(int *bestScore) {
+void updateLeaderboard(int moves) {
+    for (int i = 0; i < LEADERBOARD_SIZE; i++) {
+        if (moves < bestScores[i] || bestScores[i] == 0) {
+            for (int j = LEADERBOARD_SIZE - 1; j > i; j--) {
+                bestScores[j] = bestScores[j - 1];
+                strcpy(bestPlayers[j], bestPlayers[j - 1]);
+            }
+            bestScores[i] = moves;
+            strcpy(bestPlayers[i], playerName);
+            break;
+        }
+    }
+}
+
+void playGame() {
     int moves = 0;
     int matchedPairs = 0;
     int firstRow, firstCol, secondRow, secondCol;
+    time_t startTime, endTime;
 
     resetRevealed();
     initializeBoard();
+    time(&startTime);
 
     while (matchedPairs < TOTAL_CARDS) {
         printf("\nEnter coordinates of first card (row column): ");
@@ -97,7 +119,7 @@ void playGame(int *bestScore) {
         printf("\nEnter coordinates of second card (row column): ");
         scanf("%d %d", &secondRow, &secondCol);
 
-        while (!isValidInput(secondRow - 1, secondCol - 1)) {
+        while (!isValidInput(secondRow - 1, secondCol - 1) || (firstRow == secondRow && firstCol == secondCol)) {
             printf("Invalid input. Enter coordinates of second card (row column): ");
             scanf("%d %d", &secondRow, &secondCol);
         }
@@ -123,38 +145,52 @@ void playGame(int *bestScore) {
 
         printf("\nMoves: %d\n", moves);
         printf("Matched Pairs: %d\n", matchedPairs);
+        printf("Pairs left: %d\n", TOTAL_CARDS - matchedPairs);
     }
 
-    printf("\nCongratulations! You've completed the game in %d moves!\n", moves);
+    time(&endTime);
+    double elapsedTime = difftime(endTime, startTime);
 
-    if (*bestScore == 0 || moves < *bestScore) {
-        *bestScore = moves;
-        printf("New best score!\n");
+    printf("\nCongratulations %s! You've completed the game in %d moves!\n", playerName, moves);
+    printf("Time taken: %.2f seconds\n", elapsedTime);
+
+    updateLeaderboard(moves);
+}
+
+void displayLeaderboard() {
+    printf("Leaderboard:\n");
+    for (int i = 0; i < LEADERBOARD_SIZE; i++) {
+        if (bestScores[i] != 0) {
+            printf("%d. %s - %d moves\n", i + 1, bestPlayers[i], bestScores[i]);
+        } else {
+            printf("%d. ---\n", i + 1);
+        }
     }
 }
 
 int main() {
     int choice;
-    int bestScore = 0;
+
+    printf("Enter your name: ");
+    fgets(playerName, NAME_LENGTH, stdin);
+    playerName[strcspn(playerName, "\n")] = '\0';
+
+    memset(bestScores, 0, sizeof(bestScores));
 
     while (1) {
         printf("Memory Game\n");
         printf("1. Play Game\n");
-        printf("2. View Best Score\n");
+        printf("2. View Leaderboard\n");
         printf("3. Quit\n");
         printf("Enter your choice: ");
         scanf("%d", &choice);
 
         switch (choice) {
             case 1:
-                playGame(&bestScore);
+                playGame();
                 break;
             case 2:
-                if (bestScore == 0) {
-                    printf("No games played yet.\n");
-                } else {
-                    printf("Best Score: %d moves\n", bestScore);
-                }
+                displayLeaderboard();
                 break;
             case 3:
                 printf("Exiting the game. Goodbye!\n");

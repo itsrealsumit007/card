@@ -8,12 +8,20 @@
 #define NAME_LENGTH 50
 #define LEADERBOARD_SIZE 3
 #define MAX_HINTS 3
+#define DIFFICULTY_LEVELS 3
 
 typedef struct {
     int rows;
     int cols;
     int totalCards;
 } Difficulty;
+
+typedef struct {
+    int totalGames;
+    int totalMoves;
+    int bestScore;
+    double bestTime;
+} GameStats;
 
 const Difficulty difficulties[] = {
     {4, 4, 8},    // Easy: 4x4 grid, 8 cards
@@ -28,6 +36,7 @@ int bestScores[LEADERBOARD_SIZE];
 char bestPlayers[LEADERBOARD_SIZE][NAME_LENGTH];
 double bestTimes[LEADERBOARD_SIZE];
 int hints = MAX_HINTS;
+GameStats stats[DIFFICULTY_LEVELS];
 
 void initializeBoard(int rows, int cols, int totalCards) {
     char symbols[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'};
@@ -164,7 +173,36 @@ void displayLeaderboard() {
     }
 }
 
-void playGame(int rows, int cols, int totalCards) {
+void updateStats(int difficulty, int moves, double elapsedTime) {
+    stats[difficulty].totalGames++;
+    stats[difficulty].totalMoves += moves;
+    if (stats[difficulty].bestScore == 0 || moves < stats[difficulty].bestScore) {
+        stats[difficulty].bestScore = moves;
+    }
+    if (stats[difficulty].bestTime == 0 || elapsedTime < stats[difficulty].bestTime) {
+        stats[difficulty].bestTime = elapsedTime;
+    }
+}
+
+void displayStats() {
+    printf("Game Statistics:\n");
+    for (int i = 0; i < DIFFICULTY_LEVELS; i++) {
+        printf("%s Difficulty:\n", i == 0 ? "Easy" : (i == 1 ? "Medium" : "Hard"));
+        printf("Total Games Played: %d\n", stats[i].totalGames);
+        printf("Total Moves: %d\n", stats[i].totalMoves);
+        if (stats[i].totalGames > 0) {
+            printf("Average Moves per Game: %.2f\n", (double)stats[i].totalMoves / stats[i].totalGames);
+            printf("Best Score (Least Moves): %d\n", stats[i].bestScore);
+            printf("Fastest Time: %.2f seconds\n", stats[i].bestTime);
+        }
+        printf("\n");
+    }
+}
+
+void playGame(int difficulty) {
+    int rows = difficulties[difficulty].rows;
+    int cols = difficulties[difficulty].cols;
+    int totalCards = difficulties[difficulty].totalCards;
     int moves = 0;
     int matchedPairs = 0;
     int firstRow, firstCol, secondRow, secondCol;
@@ -199,54 +237,17 @@ void playGame(int rows, int cols, int totalCards) {
         revealed[secondRow - 1][secondCol - 1] = true;
         printBoard(rows, cols);
 
-        moves++;
-
         if (cards[firstRow - 1][firstCol - 1] == cards[secondRow - 1][secondCol - 1]) {
-            printf("\nMatch found!\n");
             matchedPairs++;
         } else {
-            printf("\nNo match. Cards will flip back. Press Enter to continue.\n");
-            getchar();
-            getchar();
+            sleep(2);
             revealed[firstRow - 1][firstCol - 1] = false;
             revealed[secondRow - 1][secondCol - 1] = false;
-            clearScreen();
-            printBoard(rows, cols);
         }
 
-        printf("\nMoves: %d\n", moves);
-        printf("Matched Pairs: %d\n", matchedPairs);
-        printf("Pairs left: %d\n", totalCards - matchedPairs);
-        printf("Hints left: %d\n", hints);
-        
-        if (hints > 0) {
-            printf("Press 'H' for a hint or any other key to continue: ");
-            char hintChoice;
-            scanf(" %c", &hintChoice);
-            if (hintChoice == 'H' || hintChoice == 'h') {
-                hints--;
-                for (int i = 0; i < rows; i++) {
-                    for (int j = 0; j < cols; j++) {
-                        if (!revealed[i][j]) {
-                            for (int k = 0; k < rows; k++) {
-                                for (int l = 0; l < cols; l++) {
-                                    if (!revealed[k][l] && (i != k || j != l) && cards[i][j] == cards[k][l]) {
-                                        revealed[i][j] = revealed[k][l] = true;
-                                        printBoard(rows, cols);
-                                        sleep(2);
-                                        revealed[i][j] = revealed[k][l] = false;
-                                        clearScreen();
-                                        printBoard(rows, cols);
-                                        i = rows;  // Break out of both loops
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        moves++;
+        clearScreen();
+        printBoard(rows, cols);
     }
 
     time(&endTime);
@@ -256,6 +257,7 @@ void playGame(int rows, int cols, int totalCards) {
     printf("Time taken: %.2f seconds\n", elapsedTime);
 
     updateLeaderboard(moves, elapsedTime);
+    updateStats(difficulty, moves, elapsedTime);
 }
 
 int main() {
@@ -267,6 +269,7 @@ int main() {
 
     memset(bestScores, 0, sizeof(bestScores));
     memset(bestTimes, 0, sizeof(bestTimes));
+    memset(stats, 0, sizeof(stats));
 
     while (1) {
         printf("Memory Game\n");
@@ -275,22 +278,14 @@ int main() {
         printf("3. Play Game (Hard)\n");
         printf("4. Load Game\n");
         printf("5. View Leaderboard\n");
-        printf("6. Quit\n");
+        printf("6. View Game Statistics\n");
+        printf("7. Quit\n");
         printf("Enter your choice: ");
         scanf("%d", &choice);
 
         int difficultyIndex = choice - 1;
         if (difficultyIndex >= 0 && difficultyIndex <= 2) {
-            int rows = difficulties[difficultyIndex].rows;
-            int cols = difficulties[difficultyIndex].cols;
-            int totalCards = difficulties[difficultyIndex].totalCards;
-            switch (choice) {
-                case 1:
-                case 2:
-                case 3:
-                    playGame(rows, cols, totalCards);
-                    break;
-            }
+            playGame(difficultyIndex);
         } else {
             switch (choice) {
                 case 4: {
@@ -298,7 +293,7 @@ int main() {
                     time_t startTime;
                     if (loadGame(&moves, &matchedPairs, &startTime, &rows, &cols)) {
                         printf("Game loaded successfully!\n");
-                        playGame(rows, cols, rows * cols / 2);
+                        playGame(rows * cols / 8 - 1);
                     }
                     break;
                 }
@@ -306,6 +301,9 @@ int main() {
                     displayLeaderboard();
                     break;
                 case 6:
+                    displayStats();
+                    break;
+                case 7:
                     printf("Exiting the game. Goodbye!\n");
                     exit(0);
                 default:

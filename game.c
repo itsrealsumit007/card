@@ -5,30 +5,39 @@
 #include <unistd.h>
 #include <string.h>
 
-#define ROWS 4
-#define COLS 4
-#define TOTAL_CARDS (ROWS * COLS / 2)
 #define NAME_LENGTH 50
 #define LEADERBOARD_SIZE 3
 #define MAX_HINTS 3
 
-char cards[ROWS][COLS];
-bool revealed[ROWS][COLS];
+typedef struct {
+    int rows;
+    int cols;
+    int totalCards;
+} Difficulty;
+
+const Difficulty difficulties[] = {
+    {4, 4, 8},    // Easy: 4x4 grid, 8 cards
+    {4, 5, 10},   // Medium: 4x5 grid, 10 cards
+    {4, 6, 12}    // Hard: 4x6 grid, 12 cards
+};
+
+char cards[6][6];  // Maximum grid size for hard level
+bool revealed[6][6];
 char playerName[NAME_LENGTH];
 int bestScores[LEADERBOARD_SIZE];
 char bestPlayers[LEADERBOARD_SIZE][NAME_LENGTH];
 double bestTimes[LEADERBOARD_SIZE];
 int hints = MAX_HINTS;
 
-void initializeBoard() {
-    char symbols[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'};
-    int symbolCount[8] = {0};
+void initializeBoard(int rows, int cols, int totalCards) {
+    char symbols[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'};
+    int symbolCount[12] = {0};
 
     srand(time(NULL));
 
-    for (int i = 0; i < TOTAL_CARDS * 2; ) {
-        int row = rand() % ROWS;
-        int col = rand() % COLS;
+    for (int i = 0; i < totalCards * 2; ) {
+        int row = rand() % rows;
+        int col = rand() % cols;
         
         if (cards[row][col] == '\0' && symbolCount[i / 2] < 2) {
             cards[row][col] = symbols[i / 2];
@@ -38,28 +47,28 @@ void initializeBoard() {
     }
 }
 
-void resetRevealed() {
-    for (int row = 0; row < ROWS; row++) {
-        for (int col = 0; col < COLS; col++) {
+void resetRevealed(int rows, int cols) {
+    for (int row = 0; row < rows; row++) {
+        for (int col = 0; col < cols; col++) {
             revealed[row][col] = false;
         }
     }
 }
 
-void printBoard() {
+void printBoard(int rows, int cols) {
     system("cls || clear");
     
     printf("Memory Game\n\n");
 
     printf("   ");
-    for (int col = 0; col < COLS; col++) {
+    for (int col = 0; col < cols; col++) {
         printf("%2d ", col + 1);
     }
     printf("\n");
 
-    for (int row = 0; row < ROWS; row++) {
+    for (int row = 0; row < rows; row++) {
         printf("%2d ", row + 1);
-        for (int col = 0; col < COLS; col++) {
+        for (int col = 0; col < cols; col++) {
             if (revealed[row][col]) {
                 printf("[%c]", cards[row][col]);
             } else {
@@ -70,8 +79,8 @@ void printBoard() {
     }
 }
 
-bool isValidInput(int row, int col) {
-    return row >= 0 && row < ROWS && col >= 0 && col < COLS && !revealed[row][col];
+bool isValidInput(int row, int col, int rows, int cols) {
+    return row >= 0 && row < rows && col >= 0 && col < cols && !revealed[row][col];
 }
 
 void clearScreen() {
@@ -82,18 +91,19 @@ void clearScreen() {
     #endif
 }
 
-void saveGame(int moves, int matchedPairs, time_t startTime) {
+void saveGame(int moves, int matchedPairs, time_t startTime, int rows, int cols) {
     FILE *file = fopen("savegame.txt", "w");
     if (file) {
         fprintf(file, "%d %d %d %ld\n", moves, matchedPairs, hints, startTime);
-        for (int row = 0; row < ROWS; row++) {
-            for (int col = 0; col < COLS; col++) {
+        fprintf(file, "%d %d\n", rows, cols);
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
                 fprintf(file, "%c", cards[row][col]);
             }
         }
         fprintf(file, "\n");
-        for (int row = 0; row < ROWS; row++) {
-            for (int col = 0; col < COLS; col++) {
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
                 fprintf(file, "%d", revealed[row][col]);
             }
         }
@@ -104,17 +114,18 @@ void saveGame(int moves, int matchedPairs, time_t startTime) {
     }
 }
 
-bool loadGame(int *moves, int *matchedPairs, time_t *startTime) {
+bool loadGame(int *moves, int *matchedPairs, time_t *startTime, int *rows, int *cols) {
     FILE *file = fopen("savegame.txt", "r");
     if (file) {
         fscanf(file, "%d %d %d %ld\n", moves, matchedPairs, &hints, startTime);
-        for (int row = 0; row < ROWS; row++) {
-            for (int col = 0; col < COLS; col++) {
+        fscanf(file, "%d %d\n", rows, cols);
+        for (int row = 0; row < *rows; row++) {
+            for (int col = 0; col < *cols; col++) {
                 fscanf(file, " %c", &cards[row][col]);
             }
         }
-        for (int row = 0; row < ROWS; row++) {
-            for (int col = 0; col < COLS; col++) {
+        for (int row = 0; row < *rows; row++) {
+            for (int col = 0; col < *cols; col++) {
                 fscanf(file, " %d", (int *)&revealed[row][col]);
             }
         }
@@ -153,40 +164,40 @@ void displayLeaderboard() {
     }
 }
 
-void playGame() {
+void playGame(int rows, int cols, int totalCards) {
     int moves = 0;
     int matchedPairs = 0;
     int firstRow, firstCol, secondRow, secondCol;
     time_t startTime, endTime;
 
-    resetRevealed();
-    initializeBoard();
+    resetRevealed(rows, cols);
+    initializeBoard(rows, cols, totalCards);
     time(&startTime);
 
-    while (matchedPairs < TOTAL_CARDS) {
+    while (matchedPairs < totalCards) {
         printf("\nEnter coordinates of first card (row column): ");
         scanf("%d %d", &firstRow, &firstCol);
 
-        while (!isValidInput(firstRow - 1, firstCol - 1)) {
+        while (!isValidInput(firstRow - 1, firstCol - 1, rows, cols)) {
             printf("Invalid input. Enter coordinates of first card (row column): ");
             scanf("%d %d", &firstRow, &firstCol);
         }
 
         clearScreen();
         revealed[firstRow - 1][firstCol - 1] = true;
-        printBoard();
+        printBoard(rows, cols);
 
         printf("\nEnter coordinates of second card (row column): ");
         scanf("%d %d", &secondRow, &secondCol);
 
-        while (!isValidInput(secondRow - 1, secondCol - 1) || (firstRow == secondRow && firstCol == secondCol)) {
+        while (!isValidInput(secondRow - 1, secondCol - 1, rows, cols) || (firstRow == secondRow && firstCol == secondCol)) {
             printf("Invalid input. Enter coordinates of second card (row column): ");
             scanf("%d %d", &secondRow, &secondCol);
         }
 
         clearScreen();
         revealed[secondRow - 1][secondCol - 1] = true;
-        printBoard();
+        printBoard(rows, cols);
 
         moves++;
 
@@ -200,12 +211,12 @@ void playGame() {
             revealed[firstRow - 1][firstCol - 1] = false;
             revealed[secondRow - 1][secondCol - 1] = false;
             clearScreen();
-            printBoard();
+            printBoard(rows, cols);
         }
 
         printf("\nMoves: %d\n", moves);
         printf("Matched Pairs: %d\n", matchedPairs);
-        printf("Pairs left: %d\n", TOTAL_CARDS - matchedPairs);
+        printf("Pairs left: %d\n", totalCards - matchedPairs);
         printf("Hints left: %d\n", hints);
         
         if (hints > 0) {
@@ -214,19 +225,19 @@ void playGame() {
             scanf(" %c", &hintChoice);
             if (hintChoice == 'H' || hintChoice == 'h') {
                 hints--;
-                for (int i = 0; i < ROWS; i++) {
-                    for (int j = 0; j < COLS; j++) {
+                for (int i = 0; i < rows; i++) {
+                    for (int j = 0; j < cols; j++) {
                         if (!revealed[i][j]) {
-                            for (int k = 0; k < ROWS; k++) {
-                                for (int l = 0; l < COLS; l++) {
+                            for (int k = 0; k < rows; k++) {
+                                for (int l = 0; l < cols; l++) {
                                     if (!revealed[k][l] && (i != k || j != l) && cards[i][j] == cards[k][l]) {
                                         revealed[i][j] = revealed[k][l] = true;
-                                        printBoard();
+                                        printBoard(rows, cols);
                                         sleep(2);
                                         revealed[i][j] = revealed[k][l] = false;
                                         clearScreen();
-                                        printBoard();
-                                        i = ROWS;  // Break out of both loops
+                                        printBoard(rows, cols);
+                                        i = rows;  // Break out of both loops
                                         break;
                                     }
                                 }
@@ -259,34 +270,47 @@ int main() {
 
     while (1) {
         printf("Memory Game\n");
-        printf("1. Play Game\n");
-        printf("2. Load Game\n");
-        printf("3. View Leaderboard\n");
-        printf("4. Quit\n");
+        printf("1. Play Game (Easy)\n");
+        printf("2. Play Game (Medium)\n");
+        printf("3. Play Game (Hard)\n");
+        printf("4. Load Game\n");
+        printf("5. View Leaderboard\n");
+        printf("6. Quit\n");
         printf("Enter your choice: ");
         scanf("%d", &choice);
 
-        switch (choice) {
-            case 1:
-                playGame();
-                break;
-            case 2: {
-                int moves, matchedPairs;
-                time_t startTime;
-                if (loadGame(&moves, &matchedPairs, &startTime)) {
-                    printf("Game loaded successfully!\n");
-                    playGame();
-                }
-                break;
+        int difficultyIndex = choice - 1;
+        if (difficultyIndex >= 0 && difficultyIndex <= 2) {
+            int rows = difficulties[difficultyIndex].rows;
+            int cols = difficulties[difficultyIndex].cols;
+            int totalCards = difficulties[difficultyIndex].totalCards;
+            switch (choice) {
+                case 1:
+                case 2:
+                case 3:
+                    playGame(rows, cols, totalCards);
+                    break;
             }
-            case 3:
-                displayLeaderboard();
-                break;
-            case 4:
-                printf("Exiting the game. Goodbye!\n");
-                exit(0);
-            default:
-                printf("Invalid choice. Please try again.\n");
+        } else {
+            switch (choice) {
+                case 4: {
+                    int moves, matchedPairs, rows, cols;
+                    time_t startTime;
+                    if (loadGame(&moves, &matchedPairs, &startTime, &rows, &cols)) {
+                        printf("Game loaded successfully!\n");
+                        playGame(rows, cols, rows * cols / 2);
+                    }
+                    break;
+                }
+                case 5:
+                    displayLeaderboard();
+                    break;
+                case 6:
+                    printf("Exiting the game. Goodbye!\n");
+                    exit(0);
+                default:
+                    printf("Invalid choice. Please try again.\n");
+            }
         }
 
         printf("\nPress Enter to return to the main menu.\n");

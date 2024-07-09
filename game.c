@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdbool.h>
-#include <unistd.h> // for usleep() function
+#include <unistd.h>
 
 #define ROWS 4
 #define COLS 4
@@ -25,6 +25,14 @@ void initializeBoard() {
             cards[row][col] = symbols[i / 2];
             symbolCount[i / 2]++;
             i++;
+        }
+    }
+}
+
+void resetRevealed() {
+    for (int row = 0; row < ROWS; row++) {
+        for (int col = 0; col < COLS; col++) {
+            revealed[row][col] = false;
         }
     }
 }
@@ -65,13 +73,13 @@ void clearScreen() {
     #endif
 }
 
-int main() {
-    initializeBoard();
-    printBoard();
-
+void playGame(int *bestScore) {
     int moves = 0;
     int matchedPairs = 0;
     int firstRow, firstCol, secondRow, secondCol;
+
+    resetRevealed();
+    initializeBoard();
 
     while (matchedPairs < TOTAL_CARDS) {
         printf("\nEnter coordinates of first card (row column): ");
@@ -104,16 +112,62 @@ int main() {
             printf("\nMatch found!\n");
             matchedPairs++;
         } else {
-            printf("\nNo match. Cards will flip back.\n");
+            printf("\nNo match. Cards will flip back. Press Enter to continue.\n");
+            getchar();
+            getchar();
             revealed[firstRow - 1][firstCol - 1] = false;
             revealed[secondRow - 1][secondCol - 1] = false;
-            usleep(1000000); // Pause for 1 second (1000000 microseconds)
             clearScreen();
             printBoard();
         }
+
+        printf("\nMoves: %d\n", moves);
+        printf("Matched Pairs: %d\n", matchedPairs);
     }
 
     printf("\nCongratulations! You've completed the game in %d moves!\n", moves);
+
+    if (*bestScore == 0 || moves < *bestScore) {
+        *bestScore = moves;
+        printf("New best score!\n");
+    }
+}
+
+int main() {
+    int choice;
+    int bestScore = 0;
+
+    while (1) {
+        printf("Memory Game\n");
+        printf("1. Play Game\n");
+        printf("2. View Best Score\n");
+        printf("3. Quit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+
+        switch (choice) {
+            case 1:
+                playGame(&bestScore);
+                break;
+            case 2:
+                if (bestScore == 0) {
+                    printf("No games played yet.\n");
+                } else {
+                    printf("Best Score: %d moves\n", bestScore);
+                }
+                break;
+            case 3:
+                printf("Exiting the game. Goodbye!\n");
+                exit(0);
+            default:
+                printf("Invalid choice. Please try again.\n");
+        }
+
+        printf("\nPress Enter to return to the main menu.\n");
+        getchar();
+        getchar();
+        clearScreen();
+    }
 
     return 0;
 }

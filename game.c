@@ -25,12 +25,12 @@ typedef struct {
 } GameStats;
 
 const Difficulty difficulties[] = {
-    {4, 4, 8},    // Easy: 4x4 grid, 8 cards
-    {4, 5, 10},   // Medium: 4x5 grid, 10 cards
-    {4, 6, 12}    // Hard: 4x6 grid, 12 cards
+    {4, 4, 8},
+    {4, 5, 10},
+    {4, 6, 12}
 };
 
-char cards[6][6];  // Maximum grid size for hard level
+char cards[6][6];
 bool revealed[6][6];
 char playerName[NAME_LENGTH];
 int bestScores[LEADERBOARD_SIZE];
@@ -42,13 +42,10 @@ GameStats stats[DIFFICULTY_LEVELS];
 void initializeBoard(int rows, int cols, int totalCards) {
     char symbols[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'};
     int symbolCount[12] = {0};
-
     srand(time(NULL));
-
     for (int i = 0; i < totalCards * 2; ) {
         int row = rand() % rows;
         int col = rand() % cols;
-        
         if (cards[row][col] == '\0' && symbolCount[i / 2] < 2) {
             cards[row][col] = symbols[i / 2];
             symbolCount[i / 2]++;
@@ -67,15 +64,12 @@ void resetRevealed(int rows, int cols) {
 
 void printBoard(int rows, int cols) {
     system("cls || clear");
-    
     printf("Memory Game\n\n");
-
     printf("   ");
     for (int col = 0; col < cols; col++) {
         printf("%2d ", col + 1);
     }
     printf("\n");
-
     for (int row = 0; row < rows; row++) {
         printf("%2d ", row + 1);
         for (int col = 0; col < cols; col++) {
@@ -205,6 +199,12 @@ void loadStats() {
     }
 }
 
+void resetStats() {
+    memset(stats, 0, sizeof(stats));
+    saveStats();
+    printf("Game statistics have been reset.\n");
+}
+
 void displayStats() {
     printf("Game Statistics:\n");
     for (int i = 0; i < DIFFICULTY_LEVELS; i++) {
@@ -226,7 +226,7 @@ void revealHint(int rows, int cols) {
             if (!revealed[i][j]) {
                 for (int k = 0; k < rows; k++) {
                     for (int l = 0; l < cols; l++) {
-                        if (!revealed[k][l] && cards[i][j] == cards[k][l] && (i != k || j != l)) {
+                        if (cards[i][j] == cards[k][l] && !revealed[k][l] && (i != k || j != l)) {
                             revealed[i][j] = true;
                             revealed[k][l] = true;
                             printBoard(rows, cols);
@@ -309,6 +309,77 @@ void playGame(int difficulty) {
     saveStats();
 }
 
+void playTimedChallenge() {
+    int rows = 4, cols = 4, totalCards = 8;
+    int moves = 0, matchedPairs = 0;
+    time_t startTime, endTime;
+    double timeLimit = 60.0;
+
+    hints = MAX_HINTS;
+
+    initializeBoard(rows, cols, totalCards);
+    resetRevealed(rows, cols);
+    clearScreen();
+    printBoard(rows, cols);
+
+    time(&startTime);
+
+    while (matchedPairs < totalCards) {
+        int firstRow, firstCol, secondRow, secondCol;
+        
+        printf("\nEnter coordinates of first card (row column): ");
+        scanf("%d %d", &firstRow, &firstCol);
+
+        while (!isValidInput(firstRow - 1, firstCol - 1, rows, cols)) {
+            printf("Invalid input. Enter coordinates of first card (row column): ");
+            scanf("%d %d", &firstRow, &firstCol);
+        }
+
+        revealed[firstRow - 1][firstCol - 1] = true;
+        clearScreen();
+        printBoard(rows, cols);
+
+        printf("\nEnter coordinates of second card (row column): ");
+        scanf("%d %d", &secondRow, &secondCol);
+
+        while (!isValidInput(secondRow - 1, secondCol - 1, rows, cols) || (firstRow == secondRow && firstCol == secondCol)) {
+            printf("Invalid input. Enter coordinates of second card (row column): ");
+            scanf("%d %d", &secondRow, &secondCol);
+        }
+
+        clearScreen();
+        revealed[secondRow - 1][secondCol - 1] = true;
+        printBoard(rows, cols);
+
+        if (cards[firstRow - 1][firstCol - 1] == cards[secondRow - 1][secondCol - 1]) {
+            matchedPairs++;
+        } else {
+            sleep(2);
+            revealed[firstRow - 1][firstCol - 1] = false;
+            revealed[secondRow - 1][secondCol - 1] = false;
+        }
+
+        moves++;
+        clearScreen();
+        printBoard(rows, cols);
+
+        time(&endTime);
+        double elapsedTime = difftime(endTime, startTime);
+        if (elapsedTime >= timeLimit) {
+            printf("\nTime's up! You didn't finish the game within the time limit.\n");
+            return;
+        }
+    }
+
+    time(&endTime);
+    double elapsedTime = difftime(endTime, startTime);
+
+    printf("\nCongratulations %s! You've completed the timed challenge in %d moves!\n", playerName, moves);
+    printf("Time taken: %.2f seconds\n", elapsedTime);
+
+    updateLeaderboard(moves, elapsedTime);
+}
+
 int main() {
     int choice;
 
@@ -326,11 +397,13 @@ int main() {
         printf("1. Play Game (Easy)\n");
         printf("2. Play Game (Medium)\n");
         printf("3. Play Game (Hard)\n");
-        printf("4. Load Game\n");
-        printf("5. View Leaderboard\n");
-        printf("6. View Game Statistics\n");
-        printf("7. Use Hint (%d hints remaining)\n", hints);
-        printf("8. Quit\n");
+        printf("4. Play Timed Challenge\n");
+        printf("5. Load Game\n");
+        printf("6. View Leaderboard\n");
+        printf("7. View Game Statistics\n");
+        printf("8. Use Hint (%d hints remaining)\n", hints);
+        printf("9. Reset Game Statistics\n");
+        printf("10. Quit\n");
         printf("Enter your choice: ");
         scanf("%d", &choice);
 
@@ -339,7 +412,10 @@ int main() {
             playGame(difficultyIndex);
         } else {
             switch (choice) {
-                case 4: {
+                case 4:
+                    playTimedChallenge();
+                    break;
+                case 5: {
                     int moves, matchedPairs, rows, cols;
                     time_t startTime;
                     if (loadGame(&moves, &matchedPairs, &startTime, &rows, &cols)) {
@@ -348,21 +424,24 @@ int main() {
                     }
                     break;
                 }
-                case 5:
+                case 6:
                     displayLeaderboard();
                     break;
-                case 6:
+                case 7:
                     displayStats();
                     break;
-                case 7:
+                case 8:
                     if (hints > 0) {
                         hints--;
-                        revealHint(difficulties[0].rows, difficulties[0].cols);  // Assuming easy difficulty for hint
+                        revealHint(difficulties[0].rows, difficulties[0].cols);
                     } else {
                         printf("No hints remaining.\n");
                     }
                     break;
-                case 8:
+                case 9:
+                    resetStats();
+                    break;
+                case 10:
                     printf("Exiting the game. Goodbye!\n");
                     exit(0);
                 default:

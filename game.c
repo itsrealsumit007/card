@@ -9,6 +9,7 @@
 #define LEADERBOARD_SIZE 3
 #define MAX_HINTS 3
 #define DIFFICULTY_LEVELS 3
+#define STATS_FILE "gamestats.txt"
 
 typedef struct {
     int rows;
@@ -184,6 +185,26 @@ void updateStats(int difficulty, int moves, double elapsedTime) {
     }
 }
 
+void saveStats() {
+    FILE *file = fopen(STATS_FILE, "w");
+    if (file) {
+        for (int i = 0; i < DIFFICULTY_LEVELS; i++) {
+            fprintf(file, "%d %d %d %.2f\n", stats[i].totalGames, stats[i].totalMoves, stats[i].bestScore, stats[i].bestTime);
+        }
+        fclose(file);
+    }
+}
+
+void loadStats() {
+    FILE *file = fopen(STATS_FILE, "r");
+    if (file) {
+        for (int i = 0; i < DIFFICULTY_LEVELS; i++) {
+            fscanf(file, "%d %d %d %lf\n", &stats[i].totalGames, &stats[i].totalMoves, &stats[i].bestScore, &stats[i].bestTime);
+        }
+        fclose(file);
+    }
+}
+
 void displayStats() {
     printf("Game Statistics:\n");
     for (int i = 0; i < DIFFICULTY_LEVELS; i++) {
@@ -199,20 +220,47 @@ void displayStats() {
     }
 }
 
+void revealHint(int rows, int cols) {
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            if (!revealed[i][j]) {
+                for (int k = 0; k < rows; k++) {
+                    for (int l = 0; l < cols; l++) {
+                        if (!revealed[k][l] && cards[i][j] == cards[k][l] && (i != k || j != l)) {
+                            revealed[i][j] = true;
+                            revealed[k][l] = true;
+                            printBoard(rows, cols);
+                            sleep(2);
+                            revealed[i][j] = false;
+                            revealed[k][l] = false;
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 void playGame(int difficulty) {
     int rows = difficulties[difficulty].rows;
     int cols = difficulties[difficulty].cols;
     int totalCards = difficulties[difficulty].totalCards;
-    int moves = 0;
-    int matchedPairs = 0;
-    int firstRow, firstCol, secondRow, secondCol;
+    int moves = 0, matchedPairs = 0;
     time_t startTime, endTime;
 
-    resetRevealed(rows, cols);
+    hints = MAX_HINTS;
+
     initializeBoard(rows, cols, totalCards);
+    resetRevealed(rows, cols);
+    clearScreen();
+    printBoard(rows, cols);
+
     time(&startTime);
 
     while (matchedPairs < totalCards) {
+        int firstRow, firstCol, secondRow, secondCol;
+        
         printf("\nEnter coordinates of first card (row column): ");
         scanf("%d %d", &firstRow, &firstCol);
 
@@ -221,8 +269,8 @@ void playGame(int difficulty) {
             scanf("%d %d", &firstRow, &firstCol);
         }
 
-        clearScreen();
         revealed[firstRow - 1][firstCol - 1] = true;
+        clearScreen();
         printBoard(rows, cols);
 
         printf("\nEnter coordinates of second card (row column): ");
@@ -258,6 +306,7 @@ void playGame(int difficulty) {
 
     updateLeaderboard(moves, elapsedTime);
     updateStats(difficulty, moves, elapsedTime);
+    saveStats();
 }
 
 int main() {
@@ -270,6 +319,7 @@ int main() {
     memset(bestScores, 0, sizeof(bestScores));
     memset(bestTimes, 0, sizeof(bestTimes));
     memset(stats, 0, sizeof(stats));
+    loadStats();
 
     while (1) {
         printf("Memory Game\n");
@@ -279,7 +329,8 @@ int main() {
         printf("4. Load Game\n");
         printf("5. View Leaderboard\n");
         printf("6. View Game Statistics\n");
-        printf("7. Quit\n");
+        printf("7. Use Hint (%d hints remaining)\n", hints);
+        printf("8. Quit\n");
         printf("Enter your choice: ");
         scanf("%d", &choice);
 
@@ -304,6 +355,14 @@ int main() {
                     displayStats();
                     break;
                 case 7:
+                    if (hints > 0) {
+                        hints--;
+                        revealHint(difficulties[0].rows, difficulties[0].cols);  // Assuming easy difficulty for hint
+                    } else {
+                        printf("No hints remaining.\n");
+                    }
+                    break;
+                case 8:
                     printf("Exiting the game. Goodbye!\n");
                     exit(0);
                 default:
